@@ -33,6 +33,53 @@ class ListCommandTest(ShelfTestCase):
             "#2 [reading] Kindred by Octavia E. Butler",
         ])
 
+    def test_status_shows_only_matching_books_in_list_order(self):
+        self.shelf("add", "Dune", "Frank Herbert", "--status", "reading")
+        self.shelf("add", "Emma", "Jane Austen")
+        self.shelf("add", "Kindred", "Octavia E. Butler", "--status", "reading")
+        self.shelf("add", "Beloved", "Toni Morrison", "--status", "done")
+        expected = {
+            "to-read": "#2 [to-read] Emma by Jane Austen\n",
+            "reading": (
+                "#1 [reading] Dune by Frank Herbert\n"
+                "#3 [reading] Kindred by Octavia E. Butler\n"
+            ),
+            "done": "#4 [done] Beloved by Toni Morrison\n",
+        }
+
+        for status, output in expected.items():
+            with self.subTest(status=status):
+                result = self.shelf("list", "--status", status)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, output)
+
+    def test_status_without_matches_says_so(self):
+        self.shelf("add", "Dune", "Frank Herbert")
+
+        result = self.shelf("list", "--status", "done")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "No books with status done.\n")
+
+    def test_status_on_an_empty_shelf_says_no_books_match(self):
+        result = self.shelf("list", "--status", "reading")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "No books with status reading.\n")
+
+    def test_an_invalid_status_is_a_usage_error_naming_the_valid_values(self):
+        result = self.shelf("list", "--status", "bad")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+        # The usage text also names the values, so check only the error itself.
+        _, found, error = result.stderr.partition("shelf list: error: ")
+        self.assertTrue(found, result.stderr)
+        self.assertIn("invalid choice: 'bad'", error)
+        for status in ("to-read", "reading", "done"):
+            self.assertIn(status, error)
+
 
 class StartAndFinishCommandTest(ShelfTestCase):
     def test_start_then_finish_a_book(self):
